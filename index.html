@@ -3,282 +3,209 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Stack Attack Ultimate Pro</title>
+    <title>Stack Attack Stable</title>
     <link rel="manifest" href="manifest.json">
-        <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js');
-        }
-        </script>
-
     <style>
-        /* --- БАЗОВЫЕ СТИЛИ --- */
         * { -webkit-tap-highlight-color: transparent; user-select: none; box-sizing: border-box; }
         body {
-            background: #1a110a; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: #1a110a; display: flex; flex-direction: column; align-items: center; justify-content: space-between;
             color: #ff9d00; font-family: 'Courier New', monospace; margin: 0; height: 100vh; width: 100vw;
-            overflow: hidden; touch-action: none; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+            overflow: hidden; touch-action: none; padding: 0;
         }
 
-        /* --- ВЕРХНЯЯ ПАНЕЛЬ И ИНТЕРФЕЙС --- */
-        .ui { width: 100%; display: flex; justify-content: center; align-items: center; padding: 5px 0; position: relative; min-height: 55px;}
-        #score { margin: 0; font-size: 24px; z-index: 10; }
+        /* ВСЕГДА ВИДИМЫЕ КНОПКИ СЛЕВА ВВЕРХУ */
+        .fixed-ui-left {
+            position: fixed; left: 10px; top: 10px; display: flex; gap: 10px; z-index: 300;
+        }
         .top-btn {
-            width: 44px; height: 44px; background: rgba(0, 0, 0, 0.7);
-            border: 2px solid #ff9d00; border-radius: 8px; color: #ff9d00;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 18px; font-weight: bold; cursor: pointer; position: absolute; top: 5px;
+            width: 46px; height: 46px; background: rgba(0,0,0,0.8); border: 2px solid #ff9d00;
+            border-radius: 10px; color: #ff9d00; display: flex; align-items: center; justify-content: center;
+            font-size: 18px; font-weight: bold; cursor: pointer;
         }
-        #muteBtn { left: 10px; z-index: 110; }
-        #restartBtnTop { left: 65px; z-index: 110; }
-        #pauseBtnTop { right: 10px; z-index: 110; }
+        .top-btn:active { background: #ff9d00; color: #000; }
 
-        /* --- ИГРОВОЕ ПОЛЕ --- */
-        canvas { border: 3px solid #111; background: #ffa500; width: 100%; height: auto; max-height: 60vh; aspect-ratio: 21 / 9; image-rendering: pixelated; }
-        .main-container { display: flex; flex-direction: column; align-items: center; width: 100%; height: 100%; }
-        .game-area { width: 100%; max-width: 95vw; display: flex; flex-direction: column; align-items: center; }
+        /* КНОПКА ПАУЗЫ СПРАВА */
+        #pauseBtnTop { position: fixed; right: 10px; top: 10px; z-index: 300; }
 
-        /* --- МОБИЛЬНЫЕ КНОПКИ --- */
-        .controls { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; pointer-events: none; }
-        .btn-group { display: flex; gap: 10px; pointer-events: auto; }
-        .btn { width: 70px; height: 70px; background: rgba(0, 0, 0, 0.5); border: 3px solid #ff9d00; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 30px; color: #ff9d00; pointer-events: auto; }
-        .btn:active { background: #ff9d00; color: #1a110a; }
-        .jump-btn { width: 90px; height: 90px; border-radius: 50%; font-size: 16px; }
+        .game-wrapper { width: 100%; flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding-top: 60px; }
+        canvas { border: 3px solid #111; background: #ffa500; width: 95vw; height: auto; max-height: 65vh; aspect-ratio: 21 / 9; image-rendering: pixelated; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
 
-        /* --- АЛЬБОМНЫЙ РЕЖИМ --- */
-        @media (orientation: landscape) and (max-height: 500px) {
-            .main-container { flex-direction: row; justify-content: space-around; }
-            .game-area { width: 65%; order: 2; }
-            canvas { max-height: 75vh; }
-            .controls { position: absolute; width: 100%; height: 100%; top: 0; left: 0; padding: 0 20px; flex-direction: row; align-items: flex-end; }
+        .score-display { text-align: center; margin-bottom: 5px; pointer-events: none; }
+        #score { margin: 0; font-size: 28px; font-weight: bold; line-height: 1; }
+        #highScoreText { font-size: 12px; opacity: 0.7; }
+
+        .controls { width: 100%; display: flex; justify-content: space-between; align-items: flex-end; padding: 10px 20px 25px 20px; pointer-events: none; }
+        .btn-group { display: flex; gap: 15px; pointer-events: auto; }
+        .btn { width: 80px; height: 80px; background: rgba(0,0,0,0.6); border: 3px solid #ff9d00; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 35px; color: #ff9d00; pointer-events: auto; }
+        .jump-btn { width: 105px; height: 105px; border-radius: 50%; font-size: 20px; font-weight: bold; }
+
+        @media (orientation: landscape) {
+            .game-wrapper { padding-top: 20px; }
+            canvas { height: 70vh; width: auto; }
+            .controls { position: absolute; inset: 0; padding: 0 40px 15px 40px; flex-direction: row; }
         }
 
-        /* --- ОВЕРЛЕИ --- */
-        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200; }
         .window { background: #222; border: 4px solid #ff9d00; padding: 25px; border-radius: 20px; text-align: center; width: 320px; }
-        .char-selector { display: flex; align-items: center; justify-content: center; gap: 20px; margin: 20px 0; }
-        .arrow-btn { background: none; border: 2px solid #ff9d00; color: #ff9d00; font-size: 24px; padding: 5px 15px; border-radius: 10px; cursor: pointer; }
+        .char-selector { display: flex; align-items: center; justify-content: center; gap: 15px; margin: 20px 0; }
         #menuCanvas { background: #333; border: 2px solid #444; border-radius: 10px; width: 80px; height: 100px; }
-        .main-btn { background: #ff9d00; color: #111; border: none; padding: 12px; font-size: 18px; font-weight: bold; border-radius: 10px; cursor: pointer; margin-top: 15px; width: 100%; font-family: inherit; }
+        .main-btn { background: #ff9d00; color: #111; border: none; padding: 15px; font-size: 22px; font-weight: bold; border-radius: 12px; margin-top: 10px; width: 100%; cursor: pointer; font-family: inherit; }
         .hidden { display: none !important; }
     </style>
 </head>
 <body>
+    <div class="fixed-ui-left">
+        <div id="muteBtn" class="top-btn">🔊</div>
+        <div id="restartBtnTop" class="top-btn">R</div>
+    </div>
+    <div id="pauseBtnTop" class="top-btn">||</div>
 
-    <div id="muteBtn" class="top-btn">🔊</div>
-
-    <!-- ГЛАВНОЕ МЕНЮ -->
     <div id="startMenu" class="overlay">
         <div class="window">
             <h1>STACK ATTACK</h1>
-            <p>ВЫБЕРИ ЦВЕТ:</p>
+            <p id="menuHighScore" style="opacity:0.8">BEST: 0000</p>
             <div class="char-selector">
-                <button class="arrow-btn" id="prevSkin">&lt;</button>
+                <button class="arrow-btn top-btn" id="prevSkin">&lt;</button>
                 <canvas id="menuCanvas" width="80" height="100"></canvas>
-                <button class="arrow-btn" id="nextSkin">&gt;</button>
+                <button class="arrow-btn top-btn" id="nextSkin">&gt;</button>
             </div>
             <button class="main-btn" id="startBtn">СТАРТ</button>
         </div>
     </div>
 
-    <!-- КОНЕЦ ИГРЫ -->
     <div id="gameOverMenu" class="overlay hidden">
         <div class="window">
-            <h1 style="color: #ff4400;">GAME OVER</h1>
-            <p id="finalScoreText" style="font-size: 24px;">СЧЕТ: 0000</p>
+            <h1 style="color:#f40">GAME OVER</h1>
+            <p id="finalScoreText" style="font-size:32px">0000</p>
             <button class="main-btn" id="retryBtn">ЗАНОВО</button>
         </div>
     </div>
 
-    <div class="main-container">
-        <div class="game-area">
-            <div class="ui">
-                <div id="restartBtnTop" class="top-btn">R</div>
-                <h2 id="score">0000</h2>
-                <div id="pauseBtnTop" class="top-btn">||</div>
-            </div>
-            <canvas id="gameCanvas" width="630" height="270"></canvas>
+    <div class="game-wrapper">
+        <div class="score-display">
+            <h2 id="score">0000</h2>
+            <span id="highScoreText">BEST: 0000</span>
         </div>
-        <div class="controls">
-            <div class="btn-group">
-                <div id="leftBtn" class="btn">←</div>
-                <div id="rightBtn" class="btn">→</div>
-            </div>
-            <div id="jumpBtn" class="btn jump-btn">JUMP</div>
-        </div>
+        <canvas id="gameCanvas" width="630" height="270"></canvas>
     </div>
 
+    <div class="controls">
+        <div class="btn-group"><div id="leftBtn" class="btn">←</div><div id="rightBtn" class="btn">→</div></div>
+        <div id="jumpBtn" class="btn jump-btn">JUMP</div>
+    </div>
 <script>
-// --- ЗВУКОВОЙ ДВИЖОК ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-let craneOsc = null, isMuted = false;
+let craneOsc = null, isMuted = false, score = 0, highScore = localStorage.getItem('sa_final_v5') || 0;
+const TILE = 30, COLS = 21, ROWS = 9, SKINS = ["#003399", "#b30000", "#006600"];
+let skinIdx = 0, isPaused = false, isGameOver = false, gameActive = false, grid = [], falling = [], sinking = [], cranes = [], spawnT = 0, speed = 0.5;
 
-function playSound(f, t, d, v, ramp=true) {
-    if (isMuted) return;
-    try {
-        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-        o.type = t; o.frequency.setValueAtTime(f, audioCtx.currentTime);
-        o.connect(g); g.connect(audioCtx.destination);
-        g.gain.setValueAtTime(v, audioCtx.currentTime);
-        if (ramp) g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + d);
-        o.start(); o.stop(audioCtx.currentTime + d);
-    } catch(e){}
-}
-
-const sounds = {
-    step: () => playSound(120, 'triangle', 0.05, 0.05),
-    land: () => playSound(40, 'sine', 0.25, 0.6),
-    jump: () => { if(isMuted)return; const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.frequency.setValueAtTime(150, audioCtx.currentTime); o.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime+0.1); o.connect(g); g.connect(audioCtx.destination); g.gain.setValueAtTime(0.03, audioCtx.currentTime); o.start(); o.stop(audioCtx.currentTime+0.1); },
-    win: () => { if(isMuted)return; [523, 659, 783].forEach((f, i) => setTimeout(() => playSound(f, 'square', 0.2, 0.05), i*100)); },
-    death: () => { if(isMuted)return; const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(300, audioCtx.currentTime); o.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime+0.5); o.connect(g); g.connect(audioCtx.destination); g.gain.setValueAtTime(0.3, audioCtx.currentTime); o.start(); o.stop(audioCtx.currentTime+0.5); },
-    craneOn: () => { if(isMuted || craneOsc) return; craneOsc=audioCtx.createOscillator(); const g=audioCtx.createGain(); craneOsc.type='sawtooth'; craneOsc.frequency.value=40; craneOsc.connect(g); g.connect(audioCtx.destination); g.gain.value=0.01; craneOsc.start(); craneOsc.gainNode=g; },
-    craneOff: () => { if(craneOsc){craneOsc.stop(); craneOsc=null;} }
-};
-
-// --- КОНФИГУРАЦИЯ ---
-const TILE_SIZE = 30, COLS = 21, ROWS = 9;
-const COLORS = { box: "#5a2d0c", falling: "#8b4513", sinking: "#3d2616", lines: "rgba(255,255,255,0.25)", shirt: "#ffffff", skin: "#ffdbac", crane1: "#111", crane2: "#d0d0d0", outline: "#000" };
-const SKINS = ["#003399", "#b30000", "#006600"];
-let skinIdx = 0, score, isPaused, isGameOver, grid, gameSpeedMult, fallingBlocks, player, gameActive = false, sinkingRows = [], spawnTimer = 0, cranes = [];
-const activeKeys = { left: false, right: false };
+// Глобальный объект игрока инициализирован сразу, чтобы избежать ошибки "undefined"
+let player = { x: 10*TILE, y: 8*TILE, vy:0, j:false, w:22, h:30, d:1, f:0, p:false, color: SKINS[0] };
 
 const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
-const menuCanvas = document.getElementById('menuCanvas'), mCtx = menuCanvas.getContext('2d');
-const scoreEl = document.getElementById('score'), startMenu = document.getElementById('startMenu'), gameOverMenu = document.getElementById('gameOverMenu'), muteBtn = document.getElementById('muteBtn');
+const mCanvas = document.getElementById('menuCanvas'), mCtx = mCanvas.getContext('2d');
+const scoreEl = document.getElementById('score'), hsEl = document.getElementById('highScoreText');
+const activeKeys = {l: false, r: false};
 
-// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
-function renderPlayer(tCtx, x, y, suitColor, dir=1, animFrame=0, isJumping=false, isPushing=false) {
-    const pw = 22, ph = 30; let walk = Math.sin(animFrame * 0.8) * 3;
-    tCtx.save(); tCtx.translate(x, y);
-    if (dir === -1) { tCtx.translate(pw, 0); tCtx.scale(-1, 1); }
-    const dp = (px, py, w, h, c) => { tCtx.fillStyle = COLORS.outline; tCtx.fillRect(px - 1, py - 1, w + 2, h + 2); tCtx.fillStyle = c; tCtx.fillRect(px, py, w, h); };
-    if (isJumping) { dp(2, ph-6, 7, 5, suitColor); dp(pw-9, ph-6, 7, 5, suitColor); }
-    else { dp(2+walk, ph-8, 8, 8, suitColor); dp(pw-10-walk, ph-8, 8, 8, suitColor); }
-    tCtx.fillStyle=COLORS.outline; tCtx.fillRect(1, ph*0.3-1, pw-2, ph*0.45+2); tCtx.fillStyle=COLORS.shirt; tCtx.fillRect(2, ph*0.3, pw-4, ph*0.45);
-    tCtx.fillStyle=suitColor; tCtx.fillRect(2, ph*0.5, pw-4, ph*0.25); tCtx.fillRect(2, ph*0.3, 4, ph*0.3); tCtx.fillRect(pw-6, ph*0.3, 4, ph*0.3);
-    if (isPushing) { dp(pw-2, ph*0.4, 8, 5, COLORS.shirt); dp(pw+4, ph*0.4, 4, 5, COLORS.skin); }
-    else { dp(1-walk*0.5, ph*0.4, 5, 9, COLORS.shirt); dp(pw-6+walk*0.5, ph*0.4, 5, 9, COLORS.shirt); }
-    dp(pw/2-6, 4, 12, 11, COLORS.skin); dp(pw/2-8, 0, 16, 6, suitColor); dp(pw/2+2, 2, 9, 3, suitColor);
-    tCtx.restore();
+function playS(f, t, d, v) {
+    if (isMuted || (isPaused && f !== 100)) return;
+    try { const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.type = t; o.frequency.setValueAtTime(f, audioCtx.currentTime); o.connect(g); g.connect(audioCtx.destination); g.gain.setValueAtTime(v, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + d); o.start(); o.stop(audioCtx.currentTime + d); } catch(e){}
 }
+const sounds = {
+    step: () => playS(120, 'triangle', 0.05, 0.05),
+    land: () => playS(40, 'sine', 0.2, 0.5),
+    jump: () => { if(isMuted) return; const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.frequency.setValueAtTime(150, audioCtx.currentTime); o.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime+0.1); o.connect(g); g.connect(audioCtx.destination); g.gain.setValueAtTime(0.03, audioCtx.currentTime); o.start(); o.stop(audioCtx.currentTime+0.1); },
+    win: () => { if(isMuted) return; [523, 659, 783].forEach((f,i) => setTimeout(() => playS(f, 'square', 0.2, 0.05), i*100)); },
+    death: () => playS(100, 'sawtooth', 0.5, 0.3),
+    craneOn: () => { if(isMuted || craneOsc) return; craneOsc=audioCtx.createOscillator(); const g=audioCtx.createGain(); craneOsc.type='sawtooth'; craneOsc.frequency.value=40; craneOsc.connect(g); g.connect(audioCtx.destination); g.gain.value=0.01; craneOsc.start(); craneOsc.g=g; },
+    craneOff: () => { if(craneOsc){ try{craneOsc.stop();}catch(e){} craneOsc=null; } }
+};
 
-function createCrane(color, side) { return { x: side === 1 ? -60 : canvas.width + 60, targetX: 0, speed: 6, state: 'hidden', cargoType: 1, side: side, color: color }; }
-function updateMuteBtnVisibility() { if (!gameActive || isPaused || isGameOver) muteBtn.classList.remove('hidden'); else muteBtn.classList.add('hidden'); }
-function toggleMute() { isMuted = !isMuted; muteBtn.innerText = isMuted ? "🔈" : "🔊"; if (isMuted) sounds.craneOff(); else if(gameActive && !isPaused) sounds.craneOn(); }
+function renderPlayer(t, x, y, c, d=1, f=0, j=false, p=false, sc=1) {
+    const w=22, h=30; let wk = Math.sin(f*0.8)*3; t.save(); t.translate(x,y); t.scale(sc, sc); if(d===-1){t.translate(w,0); t.scale(-1,1);}
+    const dp=(px,py,pw,ph,cl)=>{ t.fillStyle="#000"; t.fillRect(px-1,py-1,pw+2,ph+2); t.fillStyle=cl; t.fillRect(px,py,pw,ph); };
+    if(j){ dp(2,h-6,7,5,c); dp(w-9,h-6,7,5,c); } else { dp(2+wk,h-8,8,8,c); dp(w-10-wk,h-8,8,8,c); }
+    t.fillStyle="#000"; t.fillRect(1,h*.3-1,w-2,h*.45+2); t.fillStyle="#fff"; t.fillRect(2,h*.3,w-4,h*.45); t.fillStyle=c; t.fillRect(2,h*.5,w-4,h*.25); t.fillRect(2,h*.3,4,h*.3); t.fillRect(w-6,h*.3,4,h*.3);
+    if(p){ dp(w-2,h*.4,8,5,"#fff"); dp(w+4,h*.4,4,5,"#ffdbac"); } else { dp(1-wk*.5,h*.4,5,9,"#fff"); dp(w-6+wk*.5,h*.4,5,9,"#fff"); }
+    dp(w/2-6,4,12,11,"#ffdbac"); dp(w/2-8,0,16,6,c); dp(w/2+2,2,9,3,c); t.restore();
+}
 
 function resetGame() {
-    score = 0; isPaused = false; isGameOver = false; gameSpeedMult = 0.5; spawnTimer = 0;
-    grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
-    player = { x: 10 * TILE_SIZE, y: (ROWS - 1) * TILE_SIZE, vy: 0, isJumping: false, w: 22, h: 30, dir: 1, animFrame: 0, isPushing: false, suitColor: SKINS[skinIdx] };
-    cranes = [createCrane(COLORS.crane1, 1)]; fallingBlocks = []; sinkingRows = []; scoreEl.innerText = "0000";
-    for (let i = 0; i < 15; i++) { let rx = Math.floor(Math.random()*COLS), ry = ROWS-1-Math.floor(Math.random()*2); if (rx<9 || rx>11) grid[ry][rx]=Math.floor(Math.random()*3)+1; }
+    score = 0; isPaused = false; isGameOver = false; speed = 0.5; spawnT = 0; grid = Array(ROWS).fill().map(()=>Array(COLS).fill(0));
+    for(let i=0; i<15; i++){ let rx=Math.floor(Math.random()*COLS), ry=ROWS-1-Math.floor(Math.random()*2); if(rx<9||rx>11) grid[ry][rx]=Math.floor(Math.random()*3)+1; else i--; }
+    player = { x: 10*TILE, y: (ROWS-1)*TILE, vy:0, j:false, w:22, h:30, d:1, f:0, p:false, color: SKINS[skinIdx] };
+    cranes = [{x:-60, tx:0, s:6, st:'hidden', c:1, side:1, color:'#111'}]; falling = []; sinking = [];
+    scoreEl.innerText = "0000"; hsEl.innerText = "BEST: " + highScore.toString().padStart(4,'0');
 }
 
-function startGame() { if (audioCtx.state === 'suspended') audioCtx.resume(); resetGame(); gameActive = true; startMenu.classList.add('hidden'); gameOverMenu.classList.add('hidden'); updateMuteBtnVisibility(); }
-function triggerGameOver() { if (isGameOver) return; isGameOver = true; gameActive = false; sounds.craneOff(); sounds.death(); document.getElementById('finalScoreText').innerText = "СЧЕТ: " + score.toString().padStart(4, '0'); gameOverMenu.classList.remove('hidden'); updateMuteBtnVisibility(); }
+function startGame() { if(audioCtx.state==='suspended')audioCtx.resume(); resetGame(); gameActive=true; document.getElementById('startMenu').classList.add('hidden'); document.getElementById('gameOverMenu').classList.add('hidden'); }
+function toggleMute() { isMuted=!isMuted; document.getElementById('muteBtn').innerText=isMuted?"🔈":"🔊"; if(isMuted) sounds.craneOff(); else if(gameActive&&!isPaused) sounds.craneOn(); }
+function isS(x,y){ let gx=Math.floor(x/TILE), gy=Math.floor(y/TILE); return gx<0||gx>=COLS||gy>=ROWS||(gy>=0 && grid[gy][gx]>0); }
 
-// --- ЛОГИКА ОБНОВЛЕНИЯ ---
 function update() {
-    if (!gameActive || isPaused || isGameOver) return;
-    if (score >= 1000 && cranes.length === 1) { gameSpeedMult = 0.5; cranes.push(createCrane(COLORS.crane2, -1)); }
-    let ms = 6 * gameSpeedMult; player.isPushing = false;
-
-    if (activeKeys.left || activeKeys.right) {
-        let oldF = Math.floor(player.animFrame); player.animFrame += 0.2;
-        if (Math.floor(player.animFrame) !== oldF && !player.isJumping) sounds.step();
-        player.dir = activeKeys.left ? -1 : 1;
-        let dx = activeKeys.left ? -ms : ms, nX = player.x + dx, tX = activeKeys.left ? nX : nX + player.w;
-        if (!isSolid(tX, player.y + 5) && !isSolid(tX, player.y + player.h - 5)) player.x = Math.max(0, Math.min(canvas.width - player.w, nX));
-        else if (!player.isJumping) {
-            let gx = Math.floor(tX/TILE_SIZE), gy = Math.floor((player.y+player.h/2)/TILE_SIZE), bX = activeKeys.left ? gx - 1 : gx + 1;
-            if (gx >= 0 && gx < COLS && grid[gy] && grid[gy][gx] > 0 && !(gy > 0 && grid[gy - 1][gx] > 0) && bX >= 0 && bX < COLS && grid[gy][bX] === 0) { player.isPushing = true; grid[gy][bX] = grid[gy][gx]; grid[gy][gx] = 0; }
+    if(!gameActive || isPaused || isGameOver) return;
+    if(score < 1000) speed = 0.5 + (score/100) * 0.05;
+    else { if(cranes.length === 1) { cranes.push({x:canvas.width+60, tx:0, s:6, st:'hidden', c:1, side:-1, color:'#d0d0d0'}); speed = 0.5; } speed = 0.5 + ((score-1000)/100) * 0.05; }
+    speed = Math.min(speed, 1.5); let ms = 6*speed; player.p = false;
+    if(activeKeys.l || activeKeys.r) {
+        let of = Math.floor(player.f); player.f+=0.2; if(Math.floor(player.f)!==of && !player.j) sounds.step();
+        player.d = activeKeys.l ? -1 : 1;
+        let nx = player.x + (activeKeys.l ? -ms : ms), tx = activeKeys.l ? nx : nx + player.w;
+        if(!isS(tx, player.y+5) && !isS(tx, player.y+player.h-5)) player.x = Math.max(0, Math.min(canvas.width-player.w, nx));
+        else if(!player.j) {
+            let gx=Math.floor(tx/TILE), gy=Math.floor((player.y+player.h/2)/TILE), bx=activeKeys.l?gx-1:gx+1;
+            if(gx>=0 && gx<COLS && grid[gy][gx]>0 && !(gy>0 && grid[gy-1][gx]>0) && bx>=0 && bx<COLS && grid[gy][bx]===0) { player.p=true; grid[gy][bx]=grid[gy][gx]; grid[gy][gx]=0; }
         }
-    } else player.animFrame = 0;
-
-    player.vy += 0.35; player.y += player.vy;
-    if (player.vy < 0 && (isSolid(player.x + 4, player.y) || isSolid(player.x + player.w - 4, player.y))) { player.vy = 0; player.y = (Math.floor(player.y / TILE_SIZE) + 1) * TILE_SIZE; }
-    let footY = player.y + player.h;
-    if (player.vy >= 0 && (isSolid(player.x + 4, footY) || isSolid(player.x + player.w - 4, footY))) { if (player.isJumping) sounds.land(); player.y = Math.floor(footY / TILE_SIZE) * TILE_SIZE - player.h; player.vy = 0; player.isJumping = false; } else player.isJumping = true;
-
-    spawnTimer++; let curInt = Math.max(60, 140 - (score / 100) * 5); let anyC = false;
-    cranes.forEach((c, idx) => {
-        let off = idx === 0 ? 0 : 35;
-        if ((spawnTimer + off) % Math.floor(curInt) === 0 && c.state === 'hidden') { c.targetX = Math.floor(Math.random() * COLS) * TILE_SIZE; c.cargoType = Math.floor(Math.random() * 3) + 1; c.state = 'entering'; }
-        let s = c.speed * gameSpeedMult * 4; if (c.state !== 'hidden') anyC = true;
-        if (c.state === 'entering') {
-            let d = c.targetX - c.x; if (Math.abs(d) <= s) { c.x = c.targetX; if (grid[Math.floor(c.x / TILE_SIZE)] > 0) triggerGameOver(); else { fallingBlocks.push({ x: c.x, y: 15, active: true, speed: 1.5, type: c.cargoType, isFromSky: true }); c.state = 'leaving'; } }
-            else c.x += Math.sign(d) * s;
-        } else if (c.state === 'leaving') { let ex = c.side === 1 ? -100 : canvas.width + 100; if (Math.abs(ex - c.x) <= s) { c.x = ex; c.state = 'hidden'; } else c.x += Math.sign(ex - c.x) * s; }
+    } else player.f = 0;
+    player.vy+=0.35; player.y+=player.vy;
+    if(player.vy<0 && (isS(player.x+4, player.y) || isS(player.x+player.w-4, player.y))) { player.vy=0; player.y=(Math.floor(player.y/TILE)+1)*TILE; }
+    let fy = player.y+player.h;
+    if(player.vy>=0 && (isS(player.x+4, fy) || isS(player.x+player.w-4, fy))) { if(player.j) sounds.land(); player.y=Math.floor(fy/TILE)*TILE-player.h; player.vy=0; player.j=false; } else player.j=true;
+    spawnT++; let ci = Math.max(60, 140-(score/100)*5); let anyC=false;
+    cranes.forEach((c, i)=>{
+        let o=i===0?0:35; if((spawnT+o)%Math.floor(ci)===0 && c.st==='hidden'){ c.tx=Math.floor(Math.random()*COLS)*TILE; c.c=Math.floor(Math.random()*3)+1; c.st='entering'; }
+        if(c.st!=='hidden') anyC=true;
+        if(c.st==='entering'){ let d=c.tx-c.x; if(Math.abs(d)<=c.s*speed*4){ c.x=c.tx; if(grid[Math.floor(c.x/TILE)]>0) over(); else { falling.push({x:c.x, y:15, s:1.5, t:c.c, sky:true}); c.st='leaving'; } } else c.x+=Math.sign(d)*c.s*speed*4; }
+        else if(c.st==='leaving'){ let ex=c.side===1?-100:canvas.width+100; if(Math.abs(ex-c.x)<=c.s*speed*4){c.x=ex; c.st='hidden';} else c.x+=Math.sign(ex-c.x)*c.s*speed*4; }
     });
-    if (anyC) sounds.craneOn(); else sounds.craneOff();
-
-    for (let i = fallingBlocks.length - 1; i >= 0; i--) {
-        let b = fallingBlocks[i]; b.y += b.speed * (gameSpeedMult * 2.5);
-        if (b.isFromSky && Math.abs((player.x+player.w/2)-(b.x+TILE_SIZE/2)) < TILE_SIZE * 0.6 && player.y < b.y + TILE_SIZE - 5 && player.y + player.h > b.y + 5) triggerGameOver();
-        let gx = Math.floor(b.x/TILE_SIZE), gy = Math.floor((b.y + TILE_SIZE - 1) / TILE_SIZE);
-        if (gy >= ROWS || (gy >= 0 && grid[gy][gx] > 0)) { sounds.land(); let ty = gy - 1; if (ty >= 0) grid[ty][gx] = b.type; fallingBlocks.splice(i, 1); if (b.isFromSky && gx === Math.floor((player.x+player.w/2)/TILE_SIZE) && ty === Math.floor((player.y+player.h/2)/TILE_SIZE)) triggerGameOver(); }
+    if(anyC) sounds.craneOn(); else sounds.craneOff();
+    for(let i=falling.length-1;i>=0;i--){
+        let b=falling[i]; b.y+=b.s*speed*2.5;
+        if(b.sky && Math.abs((player.x+player.w/2)-(b.x+TILE/2))<TILE*0.6 && player.y<b.y+TILE-5 && player.y+player.h>b.y+5) over();
+        let gx=Math.floor(b.x/TILE), gy=Math.floor((b.y+TILE-1)/TILE);
+        if(gy>=ROWS || (gy>=0 && grid[gy][gx]>0)){ sounds.land(); let ty=gy-1; if(ty >= 0) grid[ty][gx]=b.t; falling.splice(i,1); if(b.sky && gx===Math.floor((player.x+player.w/2)/TILE) && ty===Math.floor((player.y+player.h/2)/TILE)) over(); }
     }
-    for (let r = ROWS - 2; r >= 0; r--) for (let c = 0; c < COLS; c++) if (grid[r][c] > 0 && grid[r+1][c] === 0 && !fallingBlocks.some(b => Math.floor(b.x/TILE_SIZE) === c && b.y > r*TILE_SIZE)) { let t = grid[r][c]; grid[r][c] = 0; fallingBlocks.push({ x: c * TILE_SIZE, y: r * TILE_SIZE, active: true, speed: 1.5, type: t, isFromSky: false }); }
-    sinkingRows.forEach((row, i) => { row.y += 2; row.opacity -= 0.02; if (row.y > canvas.height || row.opacity <= 0) sinkingRows.splice(i, 1); });
-    for (let r = 0; r < ROWS; r++) if (grid[r].every(cell => cell > 0)) { sounds.win(); sinkingRows.push({ y: r * TILE_SIZE, opacity: 1, types: [...grid[r]] }); grid.splice(r, 1); grid.unshift(Array(COLS).fill(0)); score += 100; scoreEl.innerText = score.toString().padStart(4, '0'); gameSpeedMult = Math.min(1.5, 0.5 + (score/100)*0.05); }
+    for(let r=ROWS-2;r>=0;r--)for(let c=0;c<COLS;c++) if(grid[r][c]>0 && grid[r+1][c]===0 && !falling.some(b=>Math.floor(b.x/TILE)===c && b.y>r*TILE)){ let t=grid[r][c]; grid[r][c]=0; falling.push({x:c*TILE,y:r*TILE,s:1.5,t:t,sky:false}); }
+    sinking.forEach((row,i)=>{ row.y+=2; row.o-=.02; if(row.y>canvas.height||row.o<=0)sinking.splice(i,1); });
+    for(let r=0;r<ROWS;r++) if(grid[r].every(v=>v>0)){ sounds.win(); sinking.push({y:r*TILE, o:1, t:[...grid[r]]}); grid.splice(r,1); grid.unshift(Array(COLS).fill(0)); score+=100; scoreEl.innerText=score.toString().padStart(4,'0'); }
 }
 
-// --- ОТРИСОВКА ---
-function drawBox(x, y, color, type) {
-    ctx.strokeStyle = COLORS.outline; ctx.lineWidth = 3; ctx.strokeRect(x+1, y+1, TILE_SIZE-2, TILE_SIZE-2); ctx.fillStyle = color; ctx.fillRect(x+1, y+1, TILE_SIZE-2, TILE_SIZE-2);
-    ctx.fillStyle = COLORS.outline; ctx.fillRect(x+4, y+4, 2, 2); ctx.fillRect(x+TILE_SIZE-6, y+4, 2, 2); ctx.fillRect(x+4, y+TILE_SIZE-6, 2, 2); ctx.fillRect(x+TILE_SIZE-6, y+TILE_SIZE-6, 2, 2);
-    ctx.strokeStyle = COLORS.lines; ctx.lineWidth = 1;
-    if (type === 1) ctx.strokeRect(x+6, y+6, TILE_SIZE-12, TILE_SIZE-12);
-    else if (type === 2) { ctx.beginPath(); ctx.moveTo(x+7,y+7); ctx.lineTo(x+TILE_SIZE-7,y+TILE_SIZE-7); ctx.moveTo(x+TILE_SIZE-7,y+7); ctx.lineTo(x+7,y+TILE_SIZE-7); ctx.stroke(); }
-    else if (type === 3) { ctx.beginPath(); ctx.moveTo(x+5,y+TILE_SIZE/2-3); ctx.lineTo(x+TILE_SIZE-5,y+TILE_SIZE/2-3); ctx.moveTo(x+5,y+TILE_SIZE/2+3); ctx.lineTo(x+TILE_SIZE-5,y+TILE_SIZE/2+3); ctx.stroke(); }
-}
+function over() { if(isGameOver)return; isGameOver=true; gameActive=false; sounds.craneOff(); sounds.death(); if(score>highScore){highScore=score; localStorage.setItem('sa_final_v5',highScore);} document.getElementById('finalScoreText').innerText=score.toString().padStart(4,'0'); document.getElementById('menuHighScore').innerText="BEST: "+highScore.toString().padStart(4,'0'); document.getElementById('gameOverMenu').classList.remove('hidden'); }
+function drawB(x,y,cl,t,o=1){ ctx.save(); ctx.globalAlpha=o; ctx.strokeStyle="#000"; ctx.lineWidth=3; ctx.strokeRect(x+1,y+1,TILE-2,TILE-2); ctx.fillStyle=cl; ctx.fillRect(x+1,y+1,TILE-2,TILE-2); ctx.fillStyle="#000"; [4,TILE-6].forEach(px=>[4,TILE-6].forEach(py=>ctx.fillRect(x+px,y+py,2,2))); ctx.strokeStyle="rgba(255,255,255,.25)"; ctx.lineWidth=1; if(t===1)ctx.strokeRect(x+6,y+6,TILE-12,TILE-12); else if(t===2){ctx.beginPath();ctx.moveTo(x+7,y+7);ctx.lineTo(x+TILE-7,y+TILE-7);ctx.moveTo(x+TILE-7,y+7);ctx.lineTo(x+7,y+TILE-7);ctx.stroke();} else {ctx.beginPath();ctx.moveTo(x+5,y+TILE/2-3);ctx.lineTo(x+TILE-5,y+TILE/2-3);ctx.moveTo(x+5,y+TILE/2+3);ctx.lineTo(x+TILE-5,y+TILE/2+3);ctx.stroke();} ctx.restore(); }
 
 function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (!gameActive && !isGameOver) return;
-    let gr = ctx.createLinearGradient(0, 0, 0, 12); gr.addColorStop(0, '#333'); gr.addColorStop(0.5, '#777'); gr.addColorStop(1, '#222');
-    ctx.fillStyle = gr; ctx.fillRect(0, 0, canvas.width, 12); ctx.fillStyle = "#111"; for(let i=0; i<canvas.width; i+=40) ctx.fillRect(i+5, 4, 2, 2);
-    cranes.forEach(c => { ctx.fillStyle = COLORS.outline; ctx.fillRect(c.x + 1, 6, TILE_SIZE - 2, 10); ctx.fillStyle = c.color; ctx.fillRect(c.x + 2, 5, TILE_SIZE - 4, 8); if (c.state === 'entering') drawBox(c.x, 15, COLORS.falling, c.cargoType); });
-    sinkingRows.forEach(row => { ctx.globalAlpha = row.opacity; row.types.forEach((t, c) => drawBox(c * TILE_SIZE, row.y, COLORS.sinking, t)); }); ctx.globalAlpha = 1.0;
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (grid[r][c] > 0) drawBox(c * TILE_SIZE, r * TILE_SIZE, COLORS.box, grid[r][c]);
-    fallingBlocks.forEach(b => drawBox(b.x, b.y, b.isFromSky ? COLORS.falling : COLORS.box, b.type));
-    if (player) renderPlayer(ctx, player.x, player.y, player.suitColor, player.dir, player.animFrame, player.isJumping, player.isPushing);
-    if (isPaused) { ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.font = "30px Courier New"; ctx.fillText("PAUSE", canvas.width/2, canvas.height/2); }
+    ctx.clearRect(0,0,canvas.width,canvas.height); if(!gameActive&&!isGameOver)return;
+    let gr=ctx.createLinearGradient(0,0,0,12); gr.addColorStop(0,'#333'); gr.addColorStop(.5,'#777'); gr.addColorStop(1,'#222'); ctx.fillStyle=gr; ctx.fillRect(0,0,canvas.width,12); ctx.fillStyle="#111"; for(let i=0;i<canvas.width;i+=40)ctx.fillRect(i+5,4,2,2);
+    cranes.forEach(c=>{ ctx.fillStyle="#000"; ctx.fillRect(c.x+1,6,TILE-2,10); ctx.fillStyle=c.color; ctx.fillRect(c.x+2,5,TILE-4,8); if(c.st==='entering') drawB(c.x,15,"#8b4513",c.c); });
+    sinking.forEach(s=>s.t.forEach((v,c)=>drawB(c*TILE,s.y,"#3d2616",v,s.o)));
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++) if(grid[r][c]>0) drawB(c*TILE,r*TILE,"#5a2d0c",grid[r][c]);
+    falling.forEach(b=>drawB(b.x,b.y,b.sky?"#8b4513":"#5a2d0c",b.t));
+    renderPlayer(ctx, player.x, player.y, player.color, player.d, player.f, player.j, player.p, 1);
+    if(isPaused){ ctx.fillStyle="rgba(0,0,0,.6)"; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.fillStyle="#fff"; ctx.textAlign="center"; ctx.font="30px Courier New"; ctx.fillText("PAUSE", canvas.width/2, canvas.height/2); }
 }
 
-// --- УПРАВЛЕНИЕ ---
-function isSolid(px, py) { let gx = Math.floor(px / TILE_SIZE), gy = Math.floor(py / TILE_SIZE); return gx < 0 || gx >= COLS || gy >= ROWS || (gy >= 0 && grid[gy][gx] > 0); }
-function jumpAction() { if (player && !player.isJumping && !isPaused && gameActive) { player.vy = -7.2; player.isJumping = true; sounds.jump(); } }
-function pauseAction() { if (gameActive && !isGameOver) { isPaused = !isPaused; if (isPaused) sounds.craneOff(); updateMuteBtnVisibility(); } }
+const bind=(id,a)=>{ const e=document.getElementById(id); if(!e)return; e.addEventListener('touchstart',ev=>{ ev.preventDefault(); if(a==='l')activeKeys.l=true; if(a==='r')activeKeys.r=true; if(a==='j'&&player&&!player.j&&!isPaused) {player.vy=-7.2;player.j=true;sounds.jump();} if(a==='p'&&gameActive&&!isGameOver){isPaused=!isPaused; if(isPaused)sounds.craneOff(); } if(a==='rs'){if(isGameOver||!gameActive)startGame(); else resetGame();} }); e.addEventListener('touchend',ev=>{ ev.preventDefault(); if(a==='l')activeKeys.l=false; if(a==='r')activeKeys.r=false; }); };
+bind('leftBtn','l'); bind('rightBtn','r'); bind('jumpBtn','j'); bind('pauseBtnTop','p'); bind('restartBtnTop','rs');
 
-window.addEventListener('keydown', e => {
-    if (e.repeat) return;
-    if (e.code === 'ArrowLeft' || e.code === 'KeyA') activeKeys.left = true;
-    if (e.code === 'ArrowRight' || e.code === 'KeyD') activeKeys.right = true;
-    if (e.code === 'Space') jumpAction();
-    if (e.code === 'Enter') { if (!gameActive) startGame(); else pauseAction(); }
-    if (e.code === 'KeyR') { if(isGameOver || !gameActive) startGame(); else resetGame(); }
-});
-window.addEventListener('keyup', e => { if (e.code === 'ArrowLeft' || e.code === 'KeyA') activeKeys.left = false; if (e.code === 'ArrowRight' || e.code === 'KeyD') activeKeys.right = false; });
+window.addEventListener('keydown',e=>{ if(e.repeat)return; if(e.code==='ArrowLeft'||e.code==='KeyA')activeKeys.l=true; if(e.code==='ArrowRight'||e.code==='KeyD')activeKeys.r=true; if(e.code==='Space'&&player&&!player.j&&!isPaused){player.vy=-7.2;player.j=true;sounds.jump();} if(e.code==='Enter'){if(!gameActive)startGame(); else {isPaused=!isPaused; if(isPaused)sounds.craneOff(); }} if(e.code==='KeyR'){if(isGameOver||!gameActive)startGame(); else resetGame();} });
+window.addEventListener('keyup',e=>{ if(e.code==='ArrowLeft'||e.code==='KeyA')activeKeys.l=false; if(e.code==='ArrowRight'||e.code==='KeyD')activeKeys.r=false; });
 
-const bindBtn = (id, act) => {
-    const el = document.getElementById(id); if(!el) return;
-    el.addEventListener('touchstart', (e) => { e.preventDefault(); if (act === 'left') activeKeys.left = true; if (act === 'right') activeKeys.right = true; if (act === 'jump') jumpAction(); if (act === 'pause') pauseAction(); if (act === 'restart') { if(isGameOver || !gameActive) startGame(); else resetGame(); } });
-    el.addEventListener('touchend', (e) => { e.preventDefault(); if (act === 'left') activeKeys.left = false; if (act === 'right') activeKeys.right = false; });
-};
-bindBtn('leftBtn', 'left'); bindBtn('rightBtn', 'right'); bindBtn('jumpBtn', 'jump'); bindBtn('pauseBtnTop', 'pause'); bindBtn('restartBtnTop', 'restart');
-muteBtn.addEventListener('click', toggleMute);
-document.getElementById('startBtn').addEventListener('click', startGame);
-document.getElementById('retryBtn').addEventListener('click', startGame);
-document.getElementById('prevSkin').addEventListener('click', () => { skinIdx = (skinIdx - 1 + SKINS.length) % SKINS.length; sounds.step(); });
-document.getElementById('nextSkin').addEventListener('click', () => { skinIdx = (skinIdx + 1) % SKINS.length; sounds.step(); });
+muteBtn.onclick=toggleMute; document.getElementById('startBtn').onclick=startGame; document.getElementById('retryBtn').onclick=startGame;
+document.getElementById('prevSkin').onclick=()=>{skinIdx=(skinIdx-1+SKINS.length)%SKINS.length; sounds.step();}; document.getElementById('nextSkin').onclick=()=>{skinIdx=(skinIdx+1)%SKINS.length; sounds.step();};
 
-// Меню анимация
-function menuLoop() { if (!gameActive) { mCtx.clearRect(0, 0, menuCanvas.width, menuCanvas.height); renderPlayer(mCtx, 29, 35, SKINS[skinIdx], 1, Date.now()*0.008); } requestAnimationFrame(menuLoop); }
-menuLoop();
-
-function loop() { update(); draw(); requestAnimationFrame(loop); }
-loop();
+function mLoop(){ if(!gameActive){ mCtx.clearRect(0,0,80,100); renderPlayer(mCtx,18,20,SKINS[skinIdx],1,Date.now()*0.008,false,false,2); } requestAnimationFrame(mLoop); } mLoop();
+function gLoop(){ update(); draw(); requestAnimationFrame(gLoop); } gLoop();
+document.getElementById('menuHighScore').innerText="BEST: "+highScore.toString().padStart(4,'0');
 </script>
 </body>
 </html>
