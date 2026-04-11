@@ -1,14 +1,14 @@
 {
   "name": "Stack Attack Pro",
   "short_name": "StackAttack",
-  "start_url": "index.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#1a110a",
   "theme_color": "#ff9d00",
   "orientation": "landscape",
   "icons": [
     {
-      "src": "https://githubusercontent.com",
+      "src": "icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
