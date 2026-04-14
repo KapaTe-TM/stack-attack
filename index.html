@@ -69,8 +69,8 @@
         <div id="jumpBtn" class="btn jump-btn">JUMP</div>
     </div>
 <script>
-// --- КОНСТАНТЫ И ИНИЦИАЛИЗАЦИЯ ---
 const TILE = 30, COLS = 21, ROWS = 9;
+const FALL_SPEED = 0.7; 
 const SKINS = [
     {color: "#003399", skin: "#ffdbac", helm: "#003399"}, 
     {color: "#b30000", skin: "#ffdbac", helm: "#b30000"}, 
@@ -82,8 +82,7 @@ const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let craneOsc = null, isMuted = false, score = 0, highScore = parseInt(localStorage.getItem('sa_final_v5')) || 0;
 let skinIdx = 0, isPaused = false, isGameOver = false, gameActive = false, grid = [], falling = [], sinking = [], cranes = [], spawnT = 0, speed = 0.7;
 let visualOffsets = {}, lastTime = 0, fpsInterval = 1000 / 60;
-
-// Игрок (TILE уже объявлен выше)
+// Инициализируем объект игрока базовыми значениями, чтобы избежать ошибок отрисовки до старта
 let player = { x: 10*TILE, y: 8*TILE, vy:0, j:false, w:22, h:30, d:1, f:0, p:false, color: SKINS[0] };
 
 const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
@@ -92,7 +91,6 @@ const goCanvas = document.getElementById('goCanvas'), goCtx = goCanvas.getContex
 const scoreEl = document.getElementById('score'), hsEl = document.getElementById('highScoreText');
 const activeKeys = {l: false, r: false};
 
-// --- ЗВУКОВОЙ ДВИЖОК ---
 function playS(f, t, d, v) {
     if (isMuted || (isPaused && f !== 60)) return; 
     try { 
@@ -106,35 +104,36 @@ function playS(f, t, d, v) {
 }
 
 const sounds = {
-    step: () => playS(100, 'triangle', 0.05, 0.1),
-    land: () => playS(50, 'sine', 0.15, 0.3),
+    step: () => playS(100, 'triangle', 0.05, 0.14), 
+    land: () => playS(50, 'sine', 0.15, 0.4),      
     jump: () => { 
         if(isMuted || isPaused) return; 
         const o=audioCtx.createOscillator(), g=audioCtx.createGain(); 
         o.frequency.setValueAtTime(150, audioCtx.currentTime); 
         o.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime+0.1); 
         o.connect(g); g.connect(audioCtx.destination); 
-        g.gain.setValueAtTime(0.05, audioCtx.currentTime); 
+        g.gain.setValueAtTime(0.07, audioCtx.currentTime); 
         o.start(); o.stop(audioCtx.currentTime+0.1); 
     },
     win: () => { 
         if(isMuted || isPaused) return;
         [523, 659, 783, 1046].forEach((f, i) => {
-            setTimeout(() => playS(f, 'square', 0.3, 0.1), i * 100);
+            setTimeout(() => playS(f, 'square', 0.3, 0.05), i * 100);
         });
     },
-    death: () => playS(60, 'sawtooth', 0.8, 0.4),
+    death: () => playS(60, 'sawtooth', 0.8, 0.55), 
     craneOn: () => { 
         if(isMuted || isPaused || craneOsc) return; 
         craneOsc = audioCtx.createOscillator(); 
         const g = audioCtx.createGain(); 
-        craneOsc.type = 'sawtooth'; craneOsc.frequency.value = 35; 
+        craneOsc.type = 'sawtooth'; 
+        craneOsc.frequency.value = 20; 
         craneOsc.connect(g); g.connect(audioCtx.destination); 
-        g.gain.value = 0.015; craneOsc.start(); craneOsc.gainNode = g; 
+        g.gain.value = 0.007; 
+        craneOsc.start(); craneOsc.gainNode = g; 
     },
     craneOff: () => { if(craneOsc){ try{craneOsc.stop();}catch(e){} craneOsc=null; } }
 };
-
 function updateSkinUI() {
     const s = SKINS[skinIdx];
     const isLocked = s.lock && highScore < s.lock;
@@ -152,7 +151,11 @@ document.getElementById('prevSkin').onclick = () => changeSkin(-1);
 document.getElementById('nextSkin').onclick = () => changeSkin(1);
 document.getElementById('prevSkinGo').onclick = () => changeSkin(-1);
 document.getElementById('nextSkinGo').onclick = () => changeSkin(1);
-function isS(x,y){ let gx=Math.floor(x/TILE), gy=Math.floor(y/TILE); return gx<0||gx>=COLS||gy>=ROWS||(gy>=0 && gy<ROWS && grid[gy][gx]>0); }
+
+function isS(x,y){ 
+    let gx=Math.floor(x/TILE), gy=Math.floor(y/TILE); 
+    return gx<0||gx>=COLS||gy>=ROWS||(gy>=0 && gy<ROWS && grid[gy] && grid[gy][gx]>0); 
+}
 
 function over() { 
     if(isGameOver) return; isGameOver = true; gameActive = false; 
@@ -165,15 +168,24 @@ function over() {
 function resetGame() {
     score = 0; isPaused = false; isGameOver = false; speed = 0.7; spawnT = 0; 
     grid = Array(ROWS).fill().map(() => Array(COLS).fill(0)); visualOffsets = {};
-    for(let i=0; i<15; i++){ let rx=Math.floor(Math.random()*COLS), ry=ROWS-1-Math.floor(Math.random()*2); if(rx<9||rx>11) grid[ry][rx]=Math.floor(Math.random()*3)+1; else i--; }
+    for(let i=0; i<15; i++){ 
+        let rx=Math.floor(Math.random()*COLS), ry=ROWS-1-Math.floor(Math.random()*2); 
+        if(rx<9||rx>11) grid[ry][rx]=Math.floor(Math.random()*3)+1; else i--; 
+    }
     player = { x: 10*TILE, y: 8*TILE, vy:0, j:false, w:22, h:30, d:1, f:0, p:false, color: SKINS[skinIdx] };
-    cranes = [{x:-100, tx:0, s:6, st:'hidden', c:1, side:1, color:'#111'}]; falling = []; sinking = [];
+    cranes = [{x:-100, tx:0, s:6, st:'hidden', c:1, side:1, color:'#111'}]; 
+    falling = []; sinking = [];
     scoreEl.innerText = "0000"; hsEl.innerText = "BEST: " + highScore.toString().padStart(4,'0');
 }
 
-function startGame() { if(audioCtx.state === 'suspended') audioCtx.resume(); resetGame(); gameActive = true; document.querySelectorAll('.overlay').forEach(el => el.classList.add('hidden')); }
+function startGame() { 
+    if(audioCtx.state === 'suspended') audioCtx.resume(); 
+    resetGame(); gameActive = true; 
+    document.querySelectorAll('.overlay').forEach(el => el.classList.add('hidden')); 
+}
 
 function renderPlayer(t, x, y, skinObj, d=1, f=0, j=false, p=false, sc=1) {
+    if(!skinObj || !skinObj.color) return;
     const w=22, h=30; let wk = Math.sin(f*0.8)*3;
     const isLocked = skinObj.lock && highScore < skinObj.lock;
     t.save(); t.translate(x,y); t.scale(sc, sc); if(isLocked) t.globalAlpha = 0.3;
@@ -188,65 +200,162 @@ function renderPlayer(t, x, y, skinObj, d=1, f=0, j=false, p=false, sc=1) {
     dp(w/2-6,4,12,11,skinObj.skin); dp(w/2-8,0,16,6,skinObj.helm); dp(w/2+2,2,9,3,skinObj.helm);
     t.restore();
 }
-
 function update() {
     if(!gameActive || isPaused || isGameOver) { if(isPaused) sounds.craneOff(); return; }
-    speed = Math.min(0.65 + (score/1500), 1.2); let ms = 5.2 * speed; player.p = false;
+
+    // ЛОГИКА ТРЕХ КРАНОВ
+    if (score >= 300 && cranes.length === 1) {
+        cranes.push({x: canvas.width + 100, tx:0, s:6, st:'hidden', c:1, side:-1, color:'#331111'});
+    }
+    if (score >= 600 && cranes.length === 2) {
+        cranes.push({x: -100, tx:0, s:6, st:'hidden', c:1, side:1, color:'#113311'});
+    }
+
+    speed = Math.min(0.65 + (score/1500), 1.2); 
+    let ms = 5.2 * speed; player.p = false;
+
     for(let k in visualOffsets){ if(visualOffsets[k]>0) visualOffsets[k]=Math.max(0, visualOffsets[k]-8); else if(visualOffsets[k]<0) visualOffsets[k]=Math.min(0, visualOffsets[k]+8); if(visualOffsets[k]===0) delete visualOffsets[k]; }
+    
     if(activeKeys.l || activeKeys.r) {
         let oldF = Math.floor(player.f); player.f += 0.2; if(Math.floor(player.f) !== oldF && !player.j) sounds.step();
         player.d = activeKeys.l ? -1 : 1; let nx = player.x + (activeKeys.l ? -ms : ms), tx = activeKeys.l ? nx : nx + player.w;
         let gx = Math.floor(tx/TILE), gy = Math.floor((player.y+player.h/2)/TILE), bx = activeKeys.l ? gx-1 : gx+1;
         let pushed = false;
-        if(gx>=0 && gx<COLS && gy>=0 && gy<ROWS && grid[gy][gx]>0 && !visualOffsets[`${gy}-${gx}`]) {
+        if(gx>=0 && gx<COLS && gy>=0 && gy<ROWS && grid[gy] && grid[gy][gx]>0 && !visualOffsets[`${gy}-${gx}`]) {
             let pCY = player.y + player.h/2; if (pCY > gy*TILE + 5 && pCY < (gy+1)*TILE) {
                 if((gy === 0 || grid[gy-1][gx] === 0) && (bx >= 0 && bx < COLS && grid[gy][bx] === 0)) {
                     let hasF = (gy+1 >= ROWS) || (grid[gy+1][bx]>0); player.p = true; pushed = true; let type = grid[gy][gx]; grid[gy][gx] = 0;
                     if(hasF){ grid[gy][bx] = type; visualOffsets[`${gy}-${bx}`] = activeKeys.l ? TILE : -TILE; } 
-                    else { falling.push({ x: bx*TILE, y: gy*TILE, s: 1.5, t: type, sky: false, visualX: gx*TILE, wasPushed: false }); }
+                    else { falling.push({ x: bx*TILE, y: gy*TILE, s: 1.5, t: type, sky: true, visualX: gx*TILE, wasPushed: false }); }
                     player.x = nx;
                 }
             }
         }
         if(!pushed && !isS(tx, player.y+5) && !isS(tx, player.y+player.h-5)) player.x = Math.max(0, Math.min(canvas.width-player.w, nx));
     } else player.f = 0;
+
     player.vy += 0.38; player.y += player.vy; if(player.vy<0 && isS(player.x+4, player.y)){ player.vy=0; player.y=(Math.floor(player.y/TILE)+1)*TILE; }
     let fy=player.y+player.h; if(player.vy>=0 && (isS(player.x+4, fy) || isS(player.x+player.w-4, fy))){ if(player.j) sounds.land(); player.y=Math.floor(fy/TILE)*TILE-player.h; player.vy=0; player.j=false; } else player.j=true;
+    
     spawnT++; let anyC = false;
-    cranes.forEach((c,i)=>{ if((spawnT+(i*60))%160===0 && c.st==='hidden'){ c.side = Math.random() > 0.5 ? 1 : -1; c.x = c.side === 1 ? -100 : canvas.width + 100; c.tx = Math.floor(Math.random()*(COLS-4) + 2)*TILE; c.c = Math.floor(Math.random()*3)+1; c.st = 'entering'; }
-        if(c.st !== 'hidden') anyC = true; if(c.st === 'entering'){ let d = c.tx - c.x; if(Math.abs(d) <= 4){ c.x = c.tx; if(grid[Math.floor(c.x/TILE)]>0) over(); else { falling.push({x:c.x, y:15, s:1.5, t:c.c, sky:true, visualX:c.x, wasPushed: false}); c.st='leaving'; } } else c.x += Math.sign(d)*4; }
-        else if(c.st==='leaving'){ let destX = c.side === 1 ? canvas.width + 100 : -100; if(Math.abs(destX - c.x) <= 5){ c.st='hidden'; } else c.x += c.side * 4; }
+    cranes.forEach((c,i)=>{ 
+        let offset = i * 55;
+        if((spawnT + offset) % 160 === 0 && c.st === 'hidden'){ 
+            c.side = Math.random() > 0.5 ? 1 : -1; 
+            c.x = c.side === 1 ? -100 : canvas.width + 100; 
+            c.tx = Math.floor(Math.random()*(COLS-4) + 2)*TILE; 
+            c.c = Math.floor(Math.random()*3)+1; 
+            c.st = 'entering'; 
+        }
+        if(c.st !== 'hidden') anyC = true; 
+        if(c.st === 'entering'){ 
+            let d = c.tx - c.x; 
+            if(Math.abs(d) <= 4){ 
+                c.x = c.tx; 
+                if(grid[Math.floor(c.x/TILE)] && grid[Math.floor(c.x/TILE)]>0) over(); 
+                else { falling.push({x:c.x, y:15, s:1.5, t:c.c, sky:true, visualX:c.x, wasPushed: false}); c.st='leaving'; } 
+            } else c.x += Math.sign(d)*4; 
+        }
+        else if(c.st==='leaving'){ 
+            let destX = c.side === 1 ? canvas.width + 100 : -100; 
+            if(Math.abs(destX - c.x) <= 5){ c.st='hidden'; } else c.x += c.side * 4; 
+        }
     });
+
     if(anyC) sounds.craneOn(); else sounds.craneOff();
+
     for(let i=falling.length-1; i>=0; i--){
         let b = falling[i]; if(b.visualX !== undefined) { let dx = b.x - b.visualX; if(Math.abs(dx) < 6) { delete b.visualX; } else { b.visualX += Math.sign(dx) * 10; continue; } }
-        b.y += b.s * speed * 3.0; let hitX = (b.x < player.x + player.w - 4 && b.x + TILE > player.x + 4), hitY = (b.y + TILE > player.y && b.y < player.y + player.h);
-        if(hitX && hitY) { if(b.y + TILE < player.y + player.h * 0.4) over(); else if(player.j && !b.wasPushed) { let pushDir = (activeKeys.r || player.d === 1) ? 1 : -1; let nX = Math.floor(b.x/TILE) + pushDir; if(nX >= 0 && nX < COLS && grid[Math.floor(b.y/TILE)][nX] === 0) { b.visualX = b.x; b.x = nX * TILE; b.wasPushed = true; } } }
-        let gx=Math.floor(b.x/TILE), gy=Math.floor((b.y+TILE-1)/TILE); if(gy>=ROWS || (gy>=0 && grid[gy][gx]>0)){ let ty=gy-1; if(ty>=0){ grid[ty][gx]=b.t; sounds.land(); } falling.splice(i,1); }
+        b.y += b.s * FALL_SPEED * 3.0; 
+        let hitX = (b.x < player.x + player.w - 4 && b.x + TILE > player.x + 4), hitY = (b.y + TILE > player.y && b.y < player.y + player.h);
+        if(hitX && hitY) { if(b.y + TILE < player.y + player.h * 0.4) over(); else if(player.j && !b.wasPushed) { let pushDir = (activeKeys.r || player.d === 1) ? 1 : -1; let nX = Math.floor(b.x/TILE) + pushDir; if(nX >= 0 && nX < COLS && grid[Math.floor(b.y/TILE)] && grid[Math.floor(b.y/TILE)][nX] === 0) { b.visualX = b.x; b.x = nX * TILE; b.wasPushed = true; } } }
+        let gx=Math.floor(b.x/TILE), gy=Math.floor((b.y+TILE-1)/TILE); if(gy>=ROWS || (gy>=0 && grid[gy] && grid[gy][gx]>0)){ let ty=gy-1; if(ty>=0){ if(!grid[ty]) grid[ty]=[]; grid[ty][gx]=b.t; sounds.land(); } falling.splice(i,1); }
     }
-    for(let r=ROWS-2; r>=0; r--) for(let c=0; c<COLS; c++) if(grid[r][c]>0 && grid[r+1][c]===0 && !falling.some(b=>Math.floor(b.x/TILE)===c && b.y>r*TILE)){ let t=grid[r][c]; grid[r][c]=0; falling.push({x:c*TILE,y:r*TILE,s:1.5,t:t,sky:false, wasPushed: false}); }
+    for(let r=ROWS-2; r>=0; r--) for(let c=0; c<COLS; c++) if(grid[r] && grid[r][c]>0 && grid[r+1] && grid[r+1][c]===0 && !falling.some(b=>Math.floor(b.x/TILE)===c && b.y>r*TILE)){ let t=grid[r][c]; grid[r][c]=0; falling.push({x:c*TILE,y:r*TILE,s:1.5,t:t,sky:true, wasPushed: false}); }
     sinking.forEach((s,i)=>{ s.y+=2; s.o-=.02; if(s.y>canvas.height||s.o<=0) sinking.splice(i,1); });
-    for(let r=0;r<ROWS;r++) if(grid[r].every(v=>v>0)){ sounds.win(); sinking.push({y:r*TILE, o:1, t:[...grid[r]]}); grid.splice(r,1); grid.unshift(Array(COLS).fill(0)); score+=100; scoreEl.innerText=score.toString().padStart(4,'0'); }
+    for(let r=0;r<ROWS;r++) if(grid[r] && grid[r].every(v=>v>0)){ sounds.win(); sinking.push({y:r*TILE, o:1, t:[...grid[r]]}); grid.splice(r,1); grid.unshift(Array(COLS).fill(0)); score+=100; scoreEl.innerText=score.toString().padStart(4,'0'); }
+}
+function drawB(x,y,cl,t,o=1){ 
+    ctx.save(); ctx.globalAlpha=o; 
+    // Внешний контур и база ящика
+    ctx.strokeStyle="#000"; ctx.lineWidth=3; ctx.strokeRect(x+1,y+1,TILE-2,TILE-2); ctx.fillStyle=cl; ctx.fillRect(x+1,y+1,TILE-2,TILE-2);
+    
+    // ЭФФЕКТ ГЛУБИНЫ (Тень только по краям, центр чистый)
+    let boxGrad = ctx.createRadialGradient(x+TILE/2, y+TILE/2, TILE/4, x+TILE/2, y+TILE/2, TILE/1.6);
+    boxGrad.addColorStop(0, "rgba(0,0,0,0)");      
+    boxGrad.addColorStop(0.5, "rgba(0,0,0,0)");    
+    boxGrad.addColorStop(1, "rgba(0,0,0,0.25)");   
+    ctx.fillStyle = boxGrad;
+    ctx.fillRect(x+2, y+2, TILE-4, TILE-4);
+
+    // Узоры на ящиках
+    ctx.fillStyle="#000"; [4,TILE-6].forEach(px=>[4,TILE-6].forEach(py=>ctx.fillRect(x+px,y+py,2,2))); 
+    ctx.strokeStyle="rgba(255,255,255,.25)"; ctx.lineWidth=1; 
+    if(t===1)ctx.strokeRect(x+6,y+6,TILE-12,TILE-12); 
+    else if(t===2){ctx.beginPath();ctx.moveTo(x+7,y+7);ctx.lineTo(x+TILE-7,y+TILE-7);ctx.moveTo(x+TILE-7,y+7);ctx.lineTo(x+7,y+TILE-7);ctx.stroke();} 
+    else {ctx.beginPath();ctx.moveTo(x+5,y+TILE/2-3);ctx.lineTo(x+TILE-5,y+TILE/2-3);ctx.moveTo(x+5,y+TILE/2+3);ctx.lineTo(x+TILE-5,y+TILE/2+3);ctx.stroke();} 
+    ctx.restore(); 
 }
 
-function drawB(x,y,cl,t,o=1){ ctx.save(); ctx.globalAlpha=o; ctx.strokeStyle="#000"; ctx.lineWidth=3; ctx.strokeRect(x+1,y+1,TILE-2,TILE-2); ctx.fillStyle=cl; ctx.fillRect(x+1,y+1,TILE-2,TILE-2); ctx.fillStyle="#000"; [4,TILE-6].forEach(px=>[4,TILE-6].forEach(py=>ctx.fillRect(x+px,y+py,2,2))); ctx.strokeStyle="rgba(255,255,255,.25)"; ctx.lineWidth=1; if(t===1)ctx.strokeRect(x+6,y+6,TILE-12,TILE-12); else if(t===2){ctx.beginPath();ctx.moveTo(x+7,y+7);ctx.lineTo(x+TILE-7,y+TILE-7);ctx.moveTo(x+TILE-7,y+7);ctx.lineTo(x+7,y+TILE-7);ctx.stroke();} else {ctx.beginPath();ctx.moveTo(x+5,y+TILE/2-3);ctx.lineTo(x+TILE-5,y+TILE/2-3);ctx.moveTo(x+5,y+TILE/2+3);ctx.lineTo(x+TILE-5,y+TILE/2+3);ctx.stroke();} ctx.restore(); }
-
 function draw() {
-    ctx.clearRect(0,0,canvas.width,canvas.height); if(!gameActive&&!isGameOver)return;
-    const rH = 16; ctx.save(); let gR = ctx.createLinearGradient(0,0,0,rH); gR.addColorStop(0,'#444'); gR.addColorStop(.5,'#666'); gR.addColorStop(1,'#333'); ctx.fillStyle=gR; ctx.fillRect(0,0,canvas.width,rH);
-    ctx.strokeStyle="rgba(0,0,0,.4)"; ctx.lineWidth=2; for(let i=0;i<canvas.width;i+=40){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,rH);ctx.stroke();ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i+40,rH);ctx.moveTo(i+40,0);ctx.lineTo(i,rH);ctx.stroke();}
-    ctx.fillStyle="#222"; for(let i=5;i<canvas.width;i+=20){ctx.fillRect(i,2,2,2);ctx.fillRect(i,rH-4,2,2);}
-    ctx.strokeStyle="rgba(255,255,255,.1)"; ctx.beginPath(); ctx.moveTo(0,rH*.3); ctx.lineTo(canvas.width,rH*.3); ctx.stroke(); ctx.restore();
-    cranes.forEach(c=>{ ctx.fillStyle="#111"; ctx.fillRect(c.x+TILE/2-2,8,4,10); ctx.fillStyle="#000"; ctx.fillRect(c.x+1,6,TILE-2,12); ctx.fillStyle=c.color; ctx.fillRect(c.x+2,5,TILE-4,10); if(c.st==='entering') drawB(c.x,15,"#8b4513",c.c); });
-    sinking.forEach(s=>s.t.forEach((v,c)=>drawB(c*TILE,s.y,"#3d2616",v,s.o)));
-    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++) if(grid[r][c]>0) drawB(c*TILE+(visualOffsets[`${r}-${c}`]||0), r*TILE, "#5a2d0c", grid[r][c]);
-    falling.forEach(b=>drawB(b.visualX !== undefined ? b.visualX : b.x, b.y, b.sky?"#8b4513":"#5a2d0c", b.t));
-    renderPlayer(ctx, player.x, player.y, player.color, player.d, player.f, player.j, player.p, 1);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    if(!gameActive && !isGameOver) return; 
+
+    // 1. ФОН И СЕТКА
+    ctx.fillStyle = "#ffa500"; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = "rgba(0,0,0,0.05)";
+    for(let i=0; i<canvas.width; i+=TILE*2) {
+        for(let j=0; j<canvas.height; j+=TILE*2) {
+            ctx.fillRect(i+TILE-1, j, 2, canvas.height); ctx.fillRect(i, j+TILE-1, canvas.width, 2);
+            ctx.fillStyle = "rgba(0,0,0,0.15)"; ctx.fillRect(i+2, j+2, 3, 3); ctx.fillRect(i+TILE*2-5, j+2, 3, 3);
+            ctx.fillStyle = "rgba(0,0,0,0.05)";
+        }
+    }
+
+    // 2. ВИНЬЕТКА ФОНА
+    let vig = ctx.createRadialGradient(canvas.width/2, canvas.height/2, canvas.width*0.2, canvas.width/2, canvas.height/2, canvas.width*0.6);
+    vig.addColorStop(0, "rgba(0,0,0,0)"); vig.addColorStop(1, "rgba(0,0,0,0.3)");
+    ctx.fillStyle = vig; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // 3. БАЛКА-ФЕРМА
+    const rH = 20; ctx.save(); 
+    let gR = ctx.createLinearGradient(0,0,0,rH); gR.addColorStop(0,'#333'); gR.addColorStop(.5,'#555'); gR.addColorStop(1,'#222'); 
+    ctx.fillStyle=gR; ctx.fillRect(0,0,canvas.width,rH);
+    ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = 2;
+    for(let i=0; i<canvas.width; i+=40) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i+40, rH); ctx.moveTo(i+40, 0); ctx.lineTo(i, rH); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, rH); ctx.stroke();
+        ctx.fillStyle = "#222"; ctx.fillRect(i-2, 2, 4, 4); ctx.fillRect(i-2, rH-6, 4, 4);
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(0, 0, canvas.width, 4);
+    ctx.restore();
+    
+    // 4. КРАНЫ, БЛОКИ И ИГРОК
+    const BOX_COLOR = "#8b4513";
+    cranes.forEach(c=>{ 
+        ctx.fillStyle="#111"; ctx.fillRect(c.x+TILE/2-2, rH, 4, 10); 
+        ctx.fillStyle="#000"; ctx.fillRect(c.x+1, rH-4, TILE-2, 14); 
+        ctx.fillStyle=c.color; ctx.fillRect(c.x+2, rH-3, TILE-4, 12); 
+        if(c.st==='entering') drawB(c.x, rH+10, BOX_COLOR, c.c); 
+    });
+    
+    sinking.forEach(s => { if(s && s.t) s.t.forEach((v,cIdx) => { if(v > 0) drawB(cIdx*TILE, s.y, BOX_COLOR, v, s.o); }); });
+    for(let r=0;r<ROWS;r++) if(grid[r]) for(let c=0;c<COLS;c++) if(grid[r][c]>0) drawB(c*TILE+(visualOffsets[`${r}-${c}`]||0), r*TILE, BOX_COLOR, grid[r][c]);
+    falling.forEach(b=>drawB(b.visualX !== undefined ? b.visualX : b.x, b.y, BOX_COLOR, b.t));
+    if(player && player.color) renderPlayer(ctx, player.x, player.y, player.color, player.d, player.f, player.j, player.p, 1);
+
     if(isPaused){ ctx.fillStyle="rgba(0,0,0,.6)"; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.fillStyle="#fff"; ctx.textAlign="center"; ctx.font="30px Courier New"; ctx.fillText("PAUSE", canvas.width/2, canvas.height/2); }
 }
 
 function gLoop(t) { if(t-lastTime>=fpsInterval){ lastTime=t; update(); draw(); } requestAnimationFrame(gLoop); }
-window.addEventListener('keydown',e=>{ if(e.repeat)return; if(e.code==='ArrowLeft'||e.code==='KeyA')activeKeys.l=true; if(e.code==='ArrowRight'||e.code==='KeyD')activeKeys.r=true; if(e.code==='Space'&&player&&!player.j&&!isPaused){player.vy=-5.2;player.j=true;sounds.jump();} if(e.code==='Enter'){if(!gameActive)startGame(); else isPaused=!isPaused;} if(e.code==='KeyR'){if(isGameOver||!gameActive)startGame(); else resetGame();} });
+
+window.addEventListener('keydown',e=>{ 
+    if(e.repeat)return; 
+    if(e.code==='ArrowLeft'||e.code==='KeyA')activeKeys.l=true; if(e.code==='ArrowRight'||e.code==='KeyD')activeKeys.r=true; 
+    if(e.code==='Space'&&player&&!player.j&&!isPaused){player.vy=-5.2;player.j=true;sounds.jump();} 
+    if(e.code==='Enter'){if(!gameActive)startGame(); else isPaused=!isPaused;} 
+    if(e.code==='KeyR'){if(isGameOver||!gameActive)startGame(); else resetGame();} 
+});
 window.addEventListener('keyup',e=>{ if(e.code==='ArrowLeft'||e.code==='KeyA')activeKeys.l=false; if(e.code==='ArrowRight'||e.code==='KeyD')activeKeys.r=false; });
 
 document.getElementById('startBtn').onclick=startGame; document.getElementById('retryBtn').onclick=startGame;
